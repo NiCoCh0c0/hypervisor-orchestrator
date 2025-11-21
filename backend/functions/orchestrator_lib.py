@@ -117,25 +117,11 @@ def defineXML_domain(conn, request):
                 <boot dev='cdrom'/>
                 <boot dev='hd'/>
             </os>
-            <pool type="netfs">
-                <name>nfs</name>
-                <source>
-                    <host name="172.19.16.142"/>
-                    <dir path="/mnt/nfs/" />
-                    <format type='nfs'/>
-                </source>
-                <target>
-                    <path>/var/lib/libvirt/images/vms_nfs</path>
-                </target>
-            </pool>
             <devices>
                 <emulator>/usr/bin/qemu-system-x86_64</emulator>
-                
-                <disk type='network' device='disk'>
+                <disk type='file' device='disk'>
                     <driver name='qemu' type='qcow2'/>
-                    <source protocol='nfs' name='{disk_path}' index='2'>
-                        <host name='172.19.16.142'/>
-                    </source>
+                    <source file='{disk_path}' index='2' />
                     <target dev='vda' bus='virtio'/>
                 </disk>
                 <disk type='file' device='cdrom'>
@@ -153,9 +139,22 @@ def defineXML_domain(conn, request):
         </domain>
         '''
         """
-        <disk type='file' device='disk'>
+        <pool type="netfs">
+            <name>nfs</name>
+            <source>
+                <host name="172.19.16.142"/>
+                <dir path="/mnt/nfs/" />
+                <format type='nfs'/>
+            </source>
+            <target>
+                <path>/var/lib/libvirt/images/vms_nfs</path>
+            </target>
+        </pool>
+        <disk type='network' device='disk'>
             <driver name='qemu' type='qcow2'/>
-            <source file='{disk_path}' index='2' />
+            <source protocol='nfs' name='{disk_path}' index='2'>
+                <host name='172.19.16.142'/>
+            </source>
             <target dev='vda' bus='virtio'/>
         </disk>
         """
@@ -169,8 +168,14 @@ def defineXML_domain(conn, request):
 
 def migrate_domain(conn, request):
     # Besoin d'avoir la vm allumée
-    vm_name = request.form['vm_name']
-    ip_dest = request.form['ip_dest']
-    dom = conn.lookupByName(vm_name)
-    dconn = get_connector_to_node(ip_dest)
-    dom.migrate(dconn, flags=libvirt.VIR_MIGRATE_NON_SHARED_DISK)
+    try:
+        vm_name = request.form['vm_name']
+        ip_dest = request.form['ip_dest']
+        dom = conn.lookupByName(vm_name)
+        dconn = get_connector_to_node(ip_dest)
+        dom.migrate(dconn, flags=libvirt.VIR_MIGRATE_NON_SHARED_DISK)
+    except libvirt.libvirtError:
+        return make_response("<h1>libvirtError: Error when migrating domain</h1>", 400)
+    except Exception as e:
+        print(e)
+        return make_response("<h1>Unknown: Error when migrating domain</h1>", 400)
